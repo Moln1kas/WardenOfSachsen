@@ -1,10 +1,14 @@
 import { Database } from "bun:sqlite";
-import { join } from "path";
-import { env } from "../config";
+import { dirname, join } from "path";
+import { existsSync, mkdirSync } from "fs";
 
-const CLEANUP_INTERVAL = env.sessionsCleanupMs;
+const dbPath = join(process.cwd(), 'data', 'bot.db');
 
-const dbPath = join(process.cwd(), "bot.db");
+const dbDir = dirname(dbPath);
+if (!existsSync(dbDir)) {
+  mkdirSync(dbDir, { recursive: true });
+}
+
 export const db = new Database(dbPath);
 
 db.run("PRAGMA journal_mode = WAL;");
