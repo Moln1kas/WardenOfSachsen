@@ -8,10 +8,8 @@ RUN bun install --frozen-lockfile
 
 COPY . .
 
-RUN mkdir -p /app/data
+RUN mkdir -p /app/data && chown -R bun:bun /app/data
 
-RUN echo '#!/bin/sh\n\
-bunx drizzle-kit migrate\n\
-exec bun run src/index.ts' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
+USER bun
 
-ENTRYPOINT ["/app/entrypoint.sh"]
+CMD ["sh", "-c", "bunx drizzle-kit migrate && bun run src/index.ts"]
