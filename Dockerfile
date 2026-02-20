@@ -8,8 +8,6 @@ RUN bun install --frozen-lockfile
 
 COPY . .
 
-RUN mkdir -p /app/data && chown -R bun:bun /app/data
+RUN mkdir -p /app/data
 
-USER bun
-
-CMD ["sh", "-c", "bunx drizzle-kit migrate && bun run src/index.ts"]
+CMD ["bun", "run", "src/index.ts"]
