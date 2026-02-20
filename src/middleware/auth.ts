@@ -1,17 +1,17 @@
 import { Context, type NextFunction } from 'grammy';
-import { logger } from '../utils/logger';
 import { env } from '../config';
 
 export const groupGuard = async (ctx: Context, next: NextFunction) => {
-  const chatId = ctx.chat?.id;
+  if (ctx.chat?.type === 'private') return next();
 
-  if (ctx.chat?.type !== 'private' && chatId !== env.groupId) {
-    logger.warn(`Attempt to use bot in unknown chat: ${chatId} (@${ctx.chat?.title})`);
-    return;
+  if (ctx.chat?.type === 'group' || ctx.chat?.type === 'supergroup') {
+    if (ctx.chat.id !== env.groupId) {
+      return;
+    }
   }
 
   await next();
-}
+};
 
 export const adminGuard = async (ctx: Context, next: NextFunction) => {
   const chatId = ctx.chat?.id;
@@ -19,7 +19,6 @@ export const adminGuard = async (ctx: Context, next: NextFunction) => {
 
   if (ctx.chat?.type === 'private') {
     if (userId !== env.adminId) {
-      logger.warn(`Unauthorized private access attempt: @${ctx.from?.username} (${userId})`);
       return;
     }
   }

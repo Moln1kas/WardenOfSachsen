@@ -1,29 +1,52 @@
 import { logger } from "../utils/logger";
+import * as z from 'zod';
+
+const EnvSchema = z.object({
+  TOKEN: z.string(),
+
+  DB_FILE_NAME: z.string().default('bot.db'),
+
+  ADMIN_TELEGRAM_ID: z.coerce.number(),
+  CHANNEL_TELEGRAM_ID: z.coerce.number(),
+  GROUP_TELEGRAM_ID: z.coerce.number(),
+
+  SESSIONS_CLEANUP_MINUTES: z.coerce.number().default(30),
+
+  BUNKER_THRESHOLD_COUNT: z.coerce.number().default(10),
+  BUNKER_THRESHOLD_WINDOW_MS: z.coerce.number().default(10000),
+  BUNKER_DURATION_MINUTES: z.coerce.number().default(20),
+});
+
+const res = EnvSchema.safeParse(process.env);
+
+if(!res.success) {
+  res.error.issues.forEach((issue) => {
+    logger.error(`Env Config Error: ${issue.path.join(".")} - ${issue.message}`);
+  });
+  process.exit(1);
+}
+
+const parsedEnv = res.data;
 
 export const env = {
-  token: Bun.env.TOKEN || '',
-  adminId: Number(Bun.env.ADMIN_TELEGRAM_ID) || 0,
-  channelId: Number(Bun.env.CHANNEL_TELEGRAM_ID) || 0,
-  groupId: Number(Bun.env.GROUP_TELEGRAM_ID) || 0,
-  sessionsCleanupMinutes: Number(Bun.env.SESSIONS_CLEANUP_MINUTES) || 30,
+  token: parsedEnv.TOKEN,
+
+  dbFileName: parsedEnv.DB_FILE_NAME,
+
+  adminId: parsedEnv.ADMIN_TELEGRAM_ID,
+  channelId: parsedEnv.CHANNEL_TELEGRAM_ID,
+  groupId: parsedEnv.GROUP_TELEGRAM_ID,
+  
+  bunkerThresholdCount: parsedEnv.BUNKER_THRESHOLD_COUNT,
+  bunkerThresholdWidnowMs: parsedEnv.BUNKER_THRESHOLD_WINDOW_MS,
+  bunkerDurationMinutes: parsedEnv.BUNKER_DURATION_MINUTES,
+
+  sessionsCleanupMinutes: parsedEnv.SESSIONS_CLEANUP_MINUTES,
+
   get sessionsCleanupMs() {
-    return this.sessionsCleanupMinutes * 60 * 1000;
+    return parsedEnv.SESSIONS_CLEANUP_MINUTES * 60 * 1000;
   },
-  bunkerThresholdCount: Number(Bun.env.BUNKER_THRESHOLD_COUNT) || 10,
-  bunkerThresholdWidnowMs: Number(Bun.env.BUNKER_THRESHOLD_WINDOW_MS) || 10000,
-  bunkerDurationMinutes: Number(Bun.env.BUNKER_DURATION_MINUTES) || 20,
   get bunkerDurationMs() {
-    return this.bunkerDurationMinutes * 60 * 1000;
+    return parsedEnv.BUNKER_DURATION_MINUTES * 60 * 1000;
   },
 };
-
-if (!env.token) logger.error('Error: TOKEN is missing in .env');
-if (!env.adminId) logger.error('Error: ADMIN_TELEGRAM_ID is missing in .env');
-if (!env.channelId) logger.error('Error: CHANNEL_TELEGRAM_ID is missing in .env');
-if (!env.groupId) logger.error('Error: GROUP_TELEGRAM_ID is missing in .env');
-if (!env.sessionsCleanupMinutes) {
-  logger.error('Error: SESSIONS_CLEANUP_MINUTES is missing in .env');
-}
-if (!env.bunkerThresholdCount) logger.error('Error: BUNKER_THRESHOLD_COUNT is missing in .env');
-if (!env.bunkerThresholdWidnowMs) logger.error('Error: BUNKER_THRESHOLD_WINDOW_MS is missing in .env');
-if (!env.bunkerDurationMinutes) logger.error('Error: BUNKER_DURATION_MINUTES is missing in .env');

@@ -1,24 +1,25 @@
 import { bot } from './bot';
 import { env } from './config';
-import { deleteSessions, getExpiredSessions } from './db';
+import { sessions } from './db/repositories/sessions';
 import { logger } from './utils/logger';
 import { setTimeout as delay } from 'node:timers/promises';
 
 let isCleaning = false;
+
+logger.info(`Sessions cleanup interval: ${env.sessionsCleanupMs} ms`);
 
 export const handleCleanup = async () => {
   if (isCleaning) return; 
   isCleaning = true;
 
   try {
-    const expired = getExpiredSessions(env.sessionsCleanupMs);
+    const expired = await sessions.getExpired(env.sessionsCleanupMs);
     if (expired.length === 0) return;
 
     logger.info(`Cleaning up ${expired.length} expired sessions...`);
 
     let successCount = 0;
     let errorsCount = 0;
-
     const BATCH_SIZE = 20;
 
     for (let i = 0; i < expired.length; i += BATCH_SIZE) {
@@ -26,14 +27,15 @@ export const handleCleanup = async () => {
       
       await Promise.all(batch.map(async (session) => {
         try {
-          await bot.api.declineChatJoinRequest(env.channelId, session.user_id);
+          await bot.api.declineChatJoinRequest(env.channelId, session.userId);
           successCount++;
         } catch (err) {
           errorsCount++;
         }
       }));
 
-      deleteSessions(batch);
+      const idsToDelete = batch.map(s => s.userId);
+      await sessions.deleteBatch(idsToDelete);
 
       if (expired.length > BATCH_SIZE) {
         await delay(1000); 

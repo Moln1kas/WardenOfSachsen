@@ -3,7 +3,7 @@ import { generateCaptchaVoice } from '../utils/captcha';
 import { unlink } from 'node:fs/promises';
 import { env } from '../config';
 import { logger } from '../utils/logger';
-import { db } from '../db';
+import { sessions } from '../db/repositories/sessions';
 
 export const joinModule = new Composer();
 const MAX_ATTEMPTS = 3;
@@ -30,30 +30,20 @@ const checkFlood = (): boolean => {
   return requestTimestamps.length > BUNKER_THRESHOLD_COUNT;
 };
 
-const sessions = {
-  get: (id: number) => db.query('SELECT * FROM captcha_sessions WHERE user_id = ?').get(id) as any,
-  set: (id: number, code: string) => db.run(
-    'INSERT OR REPLACE INTO captcha_sessions (user_id, code, attempts, created_at) VALUES (?, ?, 0, ?)',
-    [id, code, Date.now()]
-  ),
-  incrementAttempt: (id: number) => db.run(
-    'UPDATE captcha_sessions SET attempts = attempts + 1 WHERE user_id = ?', 
-    [id]
-  ),
-  delete: (id: number) => db.run('DELETE FROM captcha_sessions WHERE user_id = ?', [id])
-};
-
 joinModule.on('chat_join_request', async (ctx) => {
   const userId = ctx.chatJoinRequest.user_chat_id;
   const chatId = ctx.chat.id;
+  
+  logger.debug(`Join request from user ${userId} to chat ${chatId}`);
 
   if (chatId !== env.channelId) return;
 
   const declineRequest = async () => {
-    await ctx.api.declineChatJoinRequest(env.channelId, userId)
-          .catch(() => {
-            sessions.set(userId, `REJECT_${crypto.randomUUID()}`);
-          });
+    try {
+      await ctx.api.declineChatJoinRequest(env.channelId, userId);
+    } catch (err) {
+      await sessions.set(userId, `REJECT_${crypto.randomUUID()}`);
+    }
   }
 
   if(isBunkerMode) {
@@ -78,7 +68,7 @@ joinModule.on('chat_join_request', async (ctx) => {
       isBunkerMode = false;
 
       await ctx.api.sendMessage(env.adminId, `Режим бункера автоматически отключен. Отклонено ${bunkerDeclineCount} заявок.`)
-            .catch(() => { });
+        .catch(() => { });
       logger.warn(`Bunker is automatically disabled. Declined: ${bunkerDeclineCount}`);
 
       bunkerDeclineCount = 0;
@@ -116,7 +106,7 @@ joinModule.on('chat_join_request', async (ctx) => {
       parse_mode: 'HTML',
     });
     
-    sessions.set(userId, codeStr);
+    await sessions.set(userId, codeStr);
   } catch (err) {
     logger.error('Join error:', err);
   } finally {
@@ -148,8 +138,6 @@ joinModule.callbackQuery('im-human-payload', async (ctx) => {
     });
   }
 });
-
-// joinModule.command('channel', async (ctx) => {
 //   const userId = ctx.from?.id;
 //   if(!userId) return;
 
@@ -233,16 +221,16 @@ joinModule.callbackQuery('im-human-payload', async (ctx) => {
 
 joinModule.on('message:text', async (ctx, next) => {
   const userId = ctx.from.id;
-  const session = sessions.get(userId);
+  const session = await sessions.get(userId);
 
   if (
-    ctx.message.text.startsWith('/') ||
     !session || 
+    ctx.message.text.startsWith('/') ||
     session.code.startsWith('REJECT')
   ) return await next();
 
   if (ctx.message.text.trim() === session.code) {
-    sessions.delete(userId);
+    await sessions.delete(userId);
     try {
       await ctx.api.approveChatJoinRequest(env.channelId, userId);
 
@@ -251,14 +239,16 @@ joinModule.on('message:text', async (ctx, next) => {
       await ctx.reply(`Не удалось одобрить вашу заявку.`);
     }
   } else {
-    sessions.incrementAttempt(userId);
-    const updatedSession = sessions.get(userId);
+    await sessions.incrementAttempt(userId);
+    const updatedSession = await sessions.get(userId);
 
-    if (updatedSession.attempts >= MAX_ATTEMPTS) {
-      sessions.delete(userId);
+    const currentAttempts = updatedSession?.attempts ?? 0;
+
+    if (currentAttempts >= MAX_ATTEMPTS) {
+      await sessions.delete(userId);
       await ctx.reply('Капча провалена. Вы можете подать заявку на вступление заново.');
     } else {
-      await ctx.reply(`Неверно. Попыток: ${MAX_ATTEMPTS - updatedSession.attempts}`);
+      await ctx.reply(`Неверно. Попыток: ${MAX_ATTEMPTS - currentAttempts}`);
     }
   }
 });

@@ -2,11 +2,12 @@ import { Composer } from 'grammy';
 import { db } from '../db';
 import { logger } from '../utils/logger';
 import { env } from '../config';
+import { banwords } from '../db/repositories/banwords';
 
 export const adminModule = new Composer();
 
 const bannedWordsCache = new Set<string>();
-const words = db.query('SELECT word FROM banned_words').all() as { word: string }[];
+const words = await banwords.getAll();
 words.forEach(row => bannedWordsCache.add(row.word.toLowerCase()));
 
 const normalizeText = (text: string): string => {
@@ -78,11 +79,10 @@ adminModule.command('banword', async (ctx) => {
   if(!userId) return;
 
   const word = ctx.match?.trim().toLowerCase();
-  if (!word) return ctx.reply('Пример: /banword плохоеслово');
+  if (!word) return ctx.reply('/banword плохоеслово');
 
   try {
-    db.run('INSERT INTO banned_words (word, added_by, created_at) VALUES (?, ?, ?)', 
-      [word, userId, Date.now()]);
+    await banwords.set(word, userId);
     
     bannedWordsCache.add(word);
     await ctx.reply(`Слово '<b>${word}</b>' добавлено в фильтр.`, { parse_mode: 'HTML' });
@@ -93,9 +93,9 @@ adminModule.command('banword', async (ctx) => {
 
 adminModule.command('unbanword', async (ctx) => {
   const word = ctx.match?.trim().toLowerCase();
-  if (!word) return ctx.reply('Пример: /unbanword неплохоеслово');
+  if (!word) return ctx.reply('/unbanword неплохоеслово');
 
-  db.run('DELETE FROM banned_words WHERE word = ?', [word]);
+  await banwords.delete(word);
   const deleted = bannedWordsCache.delete(word);
 
   if (deleted) {
