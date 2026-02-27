@@ -138,86 +138,88 @@ joinModule.callbackQuery('im-human-payload', async (ctx) => {
     });
   }
 });
-//   const userId = ctx.from?.id;
-//   if(!userId) return;
 
-//   const declineRequest = async () => {
-//     await ctx.api.declineChatJoinRequest(env.channelId, userId)
-//           .catch(() => {
-//             sessions.set(userId, `REJECT_${crypto.randomUUID()}`);
-//           });
-//   }
+joinModule.command('join', async (ctx) => {
+  const userId = ctx.from?.id;
+  if(!userId) return;
 
-//   if(isBunkerMode) {
-//     await declineRequest();
-//     bunkerDeclineCount++
-//     return;
-//   }
+  const declineRequest = async () => {
+    await ctx.api.declineChatJoinRequest(env.channelId, userId)
+          .catch(() => {
+            sessions.set(userId, `REJECT_${crypto.randomUUID()}`);
+          });
+  }
 
-//   if(!isBunkerMode && checkFlood()) {
-//     isBunkerMode = true;
+  if(isBunkerMode) {
+    await declineRequest();
+    bunkerDeclineCount++
+    return;
+  }
 
-//     await ctx.api.sendMessage(env.adminId,
-//       '<b>Зафиксирована атака!!!</b>\n\n'+
-//       `Режим бункера активирован. Срок: ${BUNKER_DURATION_MINUTES}мин.`,
-//       { parse_mode: 'HTML' },
-//     );
-//     logger.warn('ATTACK! Bunker is enabled.');
+  if(!isBunkerMode && checkFlood()) {
+    isBunkerMode = true;
 
-//     await declineRequest();
+    await ctx.api.sendMessage(env.adminId,
+      '<b>Зафиксирована атака!!!</b>\n\n'+
+      `Режим бункера активирован. Срок: ${BUNKER_DURATION_MINUTES}мин.`,
+      { parse_mode: 'HTML' },
+    );
+    logger.warn('ATTACK! Bunker is enabled.');
 
-//     setTimeout(() => {
-//       isBunkerMode = false;
+    await declineRequest();
 
-//       ctx.api.sendMessage(env.adminId, `Режим бункера автоматически отключен. Отклонено ${bunkerDeclineCount} заявок.`);
-//       logger.warn(`Bunker is automatically disabled. Declined: ${bunkerDeclineCount}`);
+    setTimeout(() => {
+      isBunkerMode = false;
 
-//       bunkerDeclineCount = 0;
-//     }, BUNKER_DURATION_MS);
+      ctx.api.sendMessage(env.adminId, `Режим бункера автоматически отключен. Отклонено ${bunkerDeclineCount} заявок.`);
+      logger.warn(`Bunker is automatically disabled. Declined: ${bunkerDeclineCount}`);
 
-//     return;
-//   }
+      bunkerDeclineCount = 0;
+    }, BUNKER_DURATION_MS);
 
-//   const digits = Array.from({ length: 3 }, () => Math.floor(Math.random() * 10));
-//   const codeStr = digits.join('');
-//   const isPremium = ctx.from?.is_premium;
+    return;
+  }
 
-//   if(isPremium) {
-//     const inlineKeyboard = new InlineKeyboard().text('Я человек', 'im-human-payload');
-//     await ctx.reply(
-//       '<b>Для входа в канал, нажмите на кнопку.</b>',
-//       {
-//         parse_mode: 'HTML',
-//         reply_markup: inlineKeyboard,
-//       }
-//     );
-//     return;
-//   }
+  const digits = Array.from({ length: 3 }, () => Math.floor(Math.random() * 10));
+  const codeStr = digits.join('');
+  const isPremium = ctx.from?.is_premium;
 
-//   let voicePath: string | undefined;
-//   try {
-//     voicePath = await generateCaptchaVoice(digits);
+  if(isPremium) {
+    const inlineKeyboard = new InlineKeyboard().text('Я человек', 'im-human-payload');
+    await ctx.reply(
+      '<b>Для входа в канал, нажмите на кнопку.</b>',
+      {
+        parse_mode: 'HTML',
+        reply_markup: inlineKeyboard,
+      }
+    );
+    return;
+  }
 
-//     await ctx.replyWithVoice(new InputFile(voicePath), {
-//       caption: 
-//         '<b>Для входа в канал, введите код из аудио.</b>\n\n' +
-//         `<blockquote>Попыток: ${MAX_ATTEMPTS}\n` +
-//         `Времени: ${CLEANUP_INTERVAL}мин</blockquote>\n\n` +
-//         '<i>Знаки препинания не нужны.</i>',
-//       parse_mode: 'HTML',
-//     });
+  let voicePath: string | undefined;
+  try {
+    voicePath = await generateCaptchaVoice(digits);
+
+    await ctx.replyWithVoice(new InputFile(voicePath), {
+      caption: 
+        '<b>Для входа в канал, введите код из аудио.</b>\n\n' +
+        `<blockquote>Попыток: ${MAX_ATTEMPTS}\n` +
+        `Времени: ${CLEANUP_INTERVAL}мин</blockquote>\n\n` +
+        '<i>Знаки препинания не нужны.</i>',
+      parse_mode: 'HTML',
+    });
     
-//     sessions.set(userId, codeStr);
-//   } catch (err) {
-//     logger.error('Join error:', err);
-//   } finally {
-//     if (voicePath) {
-//       await unlink(voicePath).catch((err) => 
-//         logger.error('Failed to delete temp file:', err)
-//       );
-//     }
-//   }
-// });
+    sessions.set(userId, codeStr);
+  } catch (err) {
+    logger.error('Join error:', err);
+  } finally {
+    if (voicePath) {
+      await unlink(voicePath).catch((err) => 
+        logger.error('Failed to delete temp file:', err)
+      );
+    }
+  }
+});
 
 joinModule.on('message:text', async (ctx, next) => {
   const userId = ctx.from.id;

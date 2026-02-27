@@ -1,4 +1,6 @@
-FROM oven/bun:latest
+FROM oven/bun:alpine
+
+RUN apk add --no-cache ffmpeg
 
 WORKDIR /app
 
