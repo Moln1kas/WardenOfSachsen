@@ -15,38 +15,32 @@ if (!existsSync(TEMP_DIR)) {
 export const generateCaptchaVoice = async (digits: number[]): Promise<string> => {
   const outputPath = join(TEMP_DIR, `captcha_${Date.now()}.ogg`);
   const voiceInputs = digits.map(d => join(NUMBERS_DIR, `${d}.ogg`));
-  
-  const musicId = Math.floor(Math.random() * 3);
-  const bgMusicPath = join(MUSIC_DIR, `${musicId}.ogg`);
 
   let filter = "";
   let voiceLabels = "";
   
   voiceInputs.forEach((_, i) => {
-    const tempo = (Math.random() * 0.3 + 0.85).toFixed(2); 
-    const delay = i === 0 ? 0 : Math.floor(Math.random() * 400 + 300);
+    const tempo = (Math.random() * 0.2 + 0.9).toFixed(2); 
+    const delay = i === 0 ? 0 : Math.floor(Math.random() * 300 + 200);
 
-    filter += `[${i}:a]adelay=${delay}|${delay},atempo=${tempo},highpass=f=200[v${i}];`;
+    filter += `[${i}:a]adelay=${delay}|${delay},atempo=${tempo}[v${i}];`;
     voiceLabels += `[v${i}]`;
   });
 
-  filter += `${voiceLabels}concat=n=${voiceInputs.length}:v=0:a=1,volume=0.3[vocal_pure];`;
+  filter += `${voiceLabels}concat=n=${voiceInputs.length}:v=0:a=1[vocal];`;
 
-  const bgIndex = voiceInputs.length;
-  
-  filter += `[${bgIndex}:a]volume=1.0,aphaser=type=t:speed=2[bg_dirty];`;
+  filter += `anoisesrc=d=7:c=brown:a=0.03:r=48000[bg];`;
 
- filter += `[vocal_pure][bg_dirty]amix=inputs=2:duration=first:weights=1 1,compand=0.3|0.3:1|1:-90/-60|-60/-40|-40/-30|-20/-20:6:0:-90:0.2,alimiter=limit=0.9[out]`;
+  filter += `[vocal][bg]amix=inputs=2:duration=first:weights=1 1,acrusher=level_in=1:level_out=1:bits=8:mode=log[out]`;
 
   const args = [
     "-y",
     ...voiceInputs.flatMap(input => ["-i", input]),
-    "-ss", `${Math.floor(Math.random() * 40)}`,
-    "-i", bgMusicPath,
     "-filter_complex", filter,
     "-map", "[out]",
     "-c:a", "libopus",
-    "-b:a", "24k",
+    "-application", "voip",
+    "-b:a", "6k",
     outputPath
   ];
 
